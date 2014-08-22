@@ -10,15 +10,213 @@
 WNDCLASSEX wc;
 
 
-HWND my_window;
-HWND MYBUTTON;
-HWND COMBO;
-HWND TEXTBOX;
+template<class T, class U>
+class bimap
+{
+private:
+	std::map<std::pair<T,U>> map__key_value;
+	std::map<std::pair<U,T>> map__key_value;
+public:
+	template<class T, class U> void add<T,U>(T key, U value)
+	{
+		map__key_value.add(std::pair<T,U>(key,value));
+		map__value_key.add(std::pair<U,T>(value,key));
+	}
+	template<class T, class U>void drop_key<T>(T key);
+	template<class T, class U>void drop_value<U>(T value);
+	template<class T, class U>bool key_exists<T>(T key);
+	template<class T, class U>bool value_exists<U>(U value);
+	template<class T, class U>T key_from_value<U>(U value);
+	template<class T, class U>U value_from_key<T>(T key);
+}
+
+
+
+
+namespace gui
+{
+	const unsigned int ELEMENTS = 128;
+	HWND hwnds[ELEMENTS];
+	HMENU menus[ELEMENTS];
+	bool btnClicked[ELEMENTS];
+	unsigned int HWND_ID = 0;
+	unsigned int MENU_ID = 0;
+
+	unsigned int menu_create()
+	{
+		MENU_ID++;
+		menus[MENU_ID] = CreateMenu();
+		return MENU_ID;
+	}
+
+	HMENU menu_get_hmenu(unsigned int menu)
+	{
+		return menus[menu];
+	}
+
+	unsigned int menu_append_submenu(unsigned int menu, const char *text)
+	{
+		MENU_ID++;
+		menus[MENU_ID] = CreatePopupMenu();
+		AppendMenu(menus[menu], MF_STRING | MF_POPUP, (UINT)menus[MENU_ID], text);
+		return MENU_ID;
+	}
+
+	unsigned int submenu_append_string(unsigned int submenu, const char *text)
+	{
+		MENU_ID++;
+		AppendMenu(menus[submenu], MF_STRING, MENU_ID, text);
+		return MENU_ID;
+	}
+
+	unsigned int submenu_append_separator(unsigned int submenu)
+	{
+		MENU_ID++;
+		MENUITEMINFO info;
+		info.cbSize = sizeof(MENUITEMINFO);
+		info.fMask = MIIM_FTYPE;
+		info.fType = MFT_SEPARATOR;
+		info.cch = 0;
+		InsertMenuItem(menus[submenu],MENU_ID,FALSE,&info);
+		return MENU_ID;
+	}
+
+	HWND get_handle(unsigned int element)
+	{
+		return hwnds[element];
+	}
+
+	unsigned int window_create(unsigned int parent, unsigned int width, unsigned int height, const char *text)
+	{
+		HWND_ID++;
+		hwnds[HWND_ID] = CreateWindowExA(WS_EX_CLIENTEDGE,
+        "WUMBOGUI_WIN32_WINDOW",
+		text,
+        WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+        CW_USEDEFAULT, CW_USEDEFAULT, width, height,
+        NULL, NULL, (HINSTANCE)GetWindowLong(hwnds[parent], GWL_HINSTANCE), NULL);
+		return HWND_ID;
+	}
+
+	void window_set_menu(unsigned int window, unsigned int menu)
+	{
+		SetMenu(hwnds[window],menus[menu]);
+	}
+
+	unsigned int tabcontroller_create(unsigned int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+	{
+		HWND_ID++;
+		hwnds[HWND_ID] = CreateWindowExW(
+								0, WC_TABCONTROLW,   // predefined class 
+                                NULL,         // no window title 
+                                WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE, 
+                                x,y,width,height,   // set size in WM_SIZE message 
+                                hwnds[parent],         // parent window 
+                                (HMENU)HWND_ID,   // edit control ID 
+                                (HINSTANCE) GetWindowLong(hwnds[parent], GWL_HINSTANCE), 
+                                NULL);        // pointer not needed 
+		return HWND_ID;
+	}
+
+	unsigned int tabcontroller_addtab(unsigned int parent, unsigned int index, const char *text)
+	{
+		HWND_ID++;
+		TCITEM tcitem;
+		tcitem.mask = TCIF_TEXT;
+		tcitem.pszText =(char*)text;
+		SendMessage(hwnds[parent],(UINT) TCM_INSERTITEMA,(WPARAM) HWND_ID,(LPARAM) &tcitem);
+		return HWND_ID;
+	}
+
+	unsigned int combobox_create(unsigned int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+	{
+		HWND_ID++;
+		hwnds[HWND_ID] = CreateWindowExW(
+								0, WC_COMBOBOXW,   // predefined class 
+                                NULL,         // no window title 
+								CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE | WS_VSCROLL, 
+                                x,y,width,height,   // set size in WM_SIZE message 
+                                hwnds[parent],         // parent window 
+                                (HMENU)HWND_ID,   // edit control ID 
+                                (HINSTANCE) GetWindowLong(hwnds[parent], GWL_HINSTANCE), 
+                                NULL);        // pointer not needed 
+		return HWND_ID;
+	}
+
+	int combobox_addstring(unsigned int combobox, const char *text)
+	{
+		//HWND_ID++;
+		SendMessage(hwnds[combobox],(UINT) CB_ADDSTRING,(WPARAM) 0,(LPARAM) text);
+		return SendMessage(hwnds[combobox],(UINT) CB_GETCOUNT,(WPARAM) 0,(LPARAM) 0)-1;
+	}
+
+	void combobox_deletestring(unsigned int combobox, int index)
+	{
+		SendMessage(hwnds[combobox],(UINT) CB_DELETESTRING,(WPARAM) index,(LPARAM) 0);
+	}
+
+	int combobox_getselectedindex(unsigned int combobox)
+	{
+		return SendMessage(hwnds[combobox], CB_GETCURSEL, 0, 0);
+	}
+
+	unsigned int textbox_create(unsigned int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, bool readonly, bool multiline, bool hscroll, bool vscroll)
+	{
+		HWND_ID++;
+		DWORD flags = 0;
+		if (readonly)
+			flags = flags | ES_READONLY;
+		if (multiline)
+			flags = flags | ES_MULTILINE;
+		if (hscroll)
+			flags = flags | WS_HSCROLL | ES_AUTOHSCROLL;
+		if (vscroll)
+			flags = flags | WS_VSCROLL | ES_AUTOVSCROLL;
+		hwnds[HWND_ID] = CreateWindowExW(
+								0, WC_EDITW,   // predefined class 
+                                NULL,         // no window title 
+                                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | flags, 
+                                x,y,width,height,   // set size in WM_SIZE message 
+                                hwnds[parent],         // parent window 
+                                (HMENU)HWND_ID,   // edit control ID 
+                                (HINSTANCE) GetWindowLong(hwnds[parent], GWL_HINSTANCE), 
+                                NULL);        // pointer not needed 
+		return HWND_ID;
+	}
+
+	void textbox_settext(unsigned int parent, const char *text)
+	{
+		SendMessage(hwnds[parent], WM_SETTEXT, 0, (LPARAM) text);
+	}
+
+	unsigned int button_create(unsigned int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, const char *text)
+	{
+		MENU_ID++;
+		hwnds[MENU_ID] = CreateWindowExA(0,WC_BUTTONA,text,
+			WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+			x,y,width,height,hwnds[parent],(HMENU)HWND_ID,(HINSTANCE)GetWindowLong(hwnds[parent], GWL_HINSTANCE),NULL);
+		return MENU_ID;
+	}
+
+	bool button_check(unsigned int button)
+	{
+		return btnClicked[button];
+	}
+}
+
+
+
+unsigned int my_window;
+unsigned int MYBUTTON;
+unsigned int COMBO;
+unsigned int TEXTBOX;
 int farts;
-LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM WParam, LPARAM LParam)
+LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
 {
 	 PAINTSTRUCT ps; 
     HDC hdc; 
+	WORD lo;
+	WORD hi;
     switch (Message)
     {
         // Quit when we close the main window
@@ -26,10 +224,29 @@ LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM WParam, LPARAM LParam
 
 		break;
     case WM_CLOSE:
-		CloseWindow(my_window);
-		ShowWindow(my_window,SW_HIDE);
+		CloseWindow(gui::get_handle(my_window));
+		ShowWindow(gui::get_handle(my_window),SW_HIDE);
         PostQuitMessage(0);
         return 0;
+		break;
+	case WM_COMMAND:
+		//lo = LOWORD(lParam);
+		//hi = HIWORD(lParam);
+		//printf("--lParam %i\n",lParam);
+		//printf("\t LOW = %i\n",lo);
+		//printf("\tHIGH = %i\n",hi);
+		lo = LOWORD(wParam);
+		hi = HIWORD(wParam);
+		//printf("--wParam--\n");
+		//printf("\t LOW = %i\n",lo);
+		//printf("\tHIGH = %i\n",hi);
+		//printf("----------\n");
+		//printf("\tbtn = %i\n",MYBUTTON);
+		if (hi == BN_CLICKED)
+		{
+			printf("LOWORD(wParam) = %i\n",LOWORD(wParam));
+			gui::btnClicked[LOWORD(wParam)] = true;
+		}
 		break;
 	/*case WM_PAINT: 
 		char str[32];
@@ -46,149 +263,17 @@ LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM WParam, LPARAM LParam
 		break;*/
     }
     
-    return DefWindowProc(Handle, Message, WParam, LParam);
+    return DefWindowProc(Handle, Message, wParam, lParam);
 }
 
 
-namespace gui
-{
-	static unsigned int TAB_ID = 1;
-	static unsigned int SUBMENUITEM_ID = 1;
-	HWND window_create(HWND parent, unsigned int width, unsigned int height, const char *text)
-	{
-		return CreateWindowExA(WS_EX_CLIENTEDGE,
-        "WUMBOGUI_WIN32_WINDOW",
-		text,
-        WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, width, height,
-        NULL, NULL, (HINSTANCE)GetWindowLong(parent, GWL_HINSTANCE), NULL);
-	}
 
-	HMENU menu_create()
-	{
-		return CreateMenu();
-	}
-
-	HMENU menu_append_submenu(HMENU menu, const char *text)
-	{
-		HMENU submenu = CreatePopupMenu();
-		AppendMenu(menu, MF_STRING | MF_POPUP, (UINT)submenu, text);
-		return submenu;
-	}
-
-	unsigned int submenu_append_string(HMENU submenu, const char *text)
-	{
-		AppendMenu(submenu, MF_STRING, ++SUBMENUITEM_ID, text);
-		return SUBMENUITEM_ID;
-	}
-
-	void submenu_append_separator(HMENU submenu)
-	{
-		MENUITEMINFO info;
-		info.cbSize = sizeof(MENUITEMINFO);
-		info.fMask = MIIM_FTYPE;
-		info.fType = MFT_SEPARATOR;
-		info.cch = 0;
-		InsertMenuItem(submenu,++SUBMENUITEM_ID,FALSE,&info);
-	}
-
-	void window_set_menu(HWND parent, HMENU menu)
-	{
-		SetMenu(parent,menu);
-	}
-
-	HWND tabcontroller_create(HWND parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
-	{
-		return CreateWindowExW(
-								0, WC_TABCONTROLW,   // predefined class 
-                                NULL,         // no window title 
-                                WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE, 
-                                x,y,width,height,   // set size in WM_SIZE message 
-                                parent,         // parent window 
-                                (HMENU)++TAB_ID,   // edit control ID 
-                                (HINSTANCE) GetWindowLong(parent, GWL_HINSTANCE), 
-                                NULL);        // pointer not needed 
-	}
-
-	HWND tabcontroller_addtab(HWND parent, unsigned int index, const char *text)
-	{
-		TCITEM tcitem;
-		tcitem.mask = TCIF_TEXT;
-		tcitem.pszText =(char*)text;
-		SendMessage(parent,(UINT) TCM_INSERTITEMA,(WPARAM) index,(LPARAM) &tcitem);
-		return 0;
-	}
-
-	HWND combobox_create(HWND parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
-	{
-		
-		return CreateWindowExW(
-								0, WC_COMBOBOXW,   // predefined class 
-                                NULL,         // no window title 
-								CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE | WS_VSCROLL, 
-                                x,y,width,height,   // set size in WM_SIZE message 
-                                parent,         // parent window 
-                                (HMENU)++TAB_ID,   // edit control ID 
-                                (HINSTANCE) GetWindowLong(parent, GWL_HINSTANCE), 
-                                NULL);        // pointer not needed 
-	}
-
-	int combobox_addstring(HWND combobox, const char *text)
-	{
-		SendMessage(combobox,(UINT) CB_ADDSTRING,(WPARAM) 0,(LPARAM) text);
-		return SendMessage(combobox,(UINT) CB_GETCOUNT,(WPARAM) 0,(LPARAM) 0)-1;
-	}
-
-	void combobox_deletestring(HWND combobox, int index)
-	{
-		SendMessage(combobox,(UINT) CB_DELETESTRING,(WPARAM) index,(LPARAM) 0);
-	}
-
-	int combobox_getselectedindex(HWND combobox)
-	{
-		return SendMessage(combobox, CB_GETCURSEL, 0, 0);
-	}
-
-	HWND textbox_create(HWND parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, bool readonly, bool multiline, bool hscroll, bool vscroll)
-	{
-		DWORD flags = 0;
-		if (readonly)
-			flags = flags | ES_READONLY;
-		if (multiline)
-			flags = flags | ES_MULTILINE;
-		if (hscroll)
-			flags = flags | WS_HSCROLL | ES_AUTOHSCROLL;
-		if (vscroll)
-			flags = flags | WS_VSCROLL | ES_AUTOVSCROLL;
-		return CreateWindowExW(
-								0, WC_EDITW,   // predefined class 
-                                NULL,         // no window title 
-                                WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | flags, 
-                                x,y,width,height,   // set size in WM_SIZE message 
-                                parent,         // parent window 
-                                (HMENU)++TAB_ID,   // edit control ID 
-                                (HINSTANCE) GetWindowLong(parent, GWL_HINSTANCE), 
-                                NULL);        // pointer not needed 
-	}
-
-	void textbox_settext(HWND parent, const char *text)
-	{
-		SendMessage(parent, WM_SETTEXT, 0, (LPARAM) text);
-	}
-
-	HWND button_create(HWND parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, const char *text)
-	{
-		return CreateWindowExA(0,WC_BUTTONA,text,
-			WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-			x,y,width,height,parent,(HMENU)++TAB_ID,(HINSTANCE)GetWindowLong(parent, GWL_HINSTANCE),NULL);
-	}
-}
 
 
 int main()
 {
 	InitCommonControlsEx(NULL);
-	HINSTANCE hInstance = (HINSTANCE)GetWindowLong(my_window, GWL_HINSTANCE);
+	HINSTANCE hInstance = (HINSTANCE)GetWindowLong(gui::get_handle(my_window), GWL_HINSTANCE);
 
 	
 	 wc.cbSize        = sizeof(WNDCLASSEX);
@@ -208,27 +293,27 @@ int main()
         MessageBox(NULL, "Window Registration Failed!", "Error!", MB_ICONEXCLAMATION | MB_OK);
 
 	my_window = gui::window_create(NULL,800,480,"ZOOBERF");
-	ShowWindow(my_window,SW_NORMAL);
-	UpdateWindow(my_window);
+	ShowWindow(gui::get_handle(my_window),SW_NORMAL);
+	UpdateWindow(gui::get_handle(my_window));
 
-	HMENU men = gui::menu_create();
-	HMENU sub = gui::menu_append_submenu(men,"&File");
-	gui::submenu_append_string(sub,"&New");
-	gui::submenu_append_string(sub,"&Open");
-	gui::submenu_append_string(sub,"&Save");
-	gui::submenu_append_string(sub,"Save &As");
-	gui::submenu_append_separator(sub);
-	gui::submenu_append_string(sub,"&Exit");
+	unsigned int men = gui::menu_create();
+	unsigned int sub = gui::menu_append_submenu(men,"&File");
+		gui::submenu_append_string(sub,"&New");
+		gui::submenu_append_string(sub,"&Open");
+		gui::submenu_append_string(sub,"&Save");
+		gui::submenu_append_string(sub,"Save &As");
+		gui::submenu_append_separator(sub);
+		gui::submenu_append_string(sub,"&Exit");
 	gui::window_set_menu(my_window, men);
 	
-	HWND tabbo = gui::tabcontroller_create(my_window, 300,32,300,200);
+	unsigned int tabbo = gui::tabcontroller_create(my_window, 300,32,300,200);
 	gui::tabcontroller_addtab(tabbo,0,"mooses");
 	gui::tabcontroller_addtab(tabbo,0,"lemons");
 	gui::textbox_create(tabbo,0,32,120,32,false,false,false,false);
 
 	MYBUTTON = gui::button_create(my_window,10,10,32,32,"OK");//CreateTextBox(my_window,10,10,100,100,true,true,true);
-	gui::textbox_create(my_window,10,120,100,64,false,false,false,false);//
-	COMBO = gui::combobox_create(my_window,10,240,100,128);//
+	gui::textbox_create(my_window,10,120,160,160,false,true,true,true);//
+	COMBO = gui::combobox_create(my_window,10,320,100,128);//
 	gui::combobox_addstring(COMBO,"lemons");
 	gui::combobox_addstring(COMBO,"chickens");
 	gui::combobox_addstring(COMBO,"mushrooms");
@@ -259,7 +344,9 @@ int main()
 			TranslateMessage(&Message);
 			DispatchMessage(&Message);
 		}
+		//printf("PEEEEEEEEEEEEEEP\n");
 		farts = gui::combobox_getselectedindex(COMBO);
+		//printf("farts = %i\n",farts);
 		char t[32];
 		memset(t,0,32);
 		if (farts >= 0)
@@ -267,7 +354,11 @@ int main()
 		else
 			sprintf(t,"<no selection>",farts);
 		gui::textbox_settext(TEXTBOX,t);
+		if (gui::button_check(MYBUTTON))
+			printf("DA BUTTON WAS CLICKEED\n");
 		Sleep(10);
+		for(unsigned int i = 0;i < gui::ELEMENTS; i++)
+			gui::btnClicked[i] = false;
 		//if (SendMessage(MYBUTTON,BM_GETSTATE,0,0) & BN_CLICKED)
 		//	printf("FUCKER\n");
 	}
