@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <CommCtrl.h>
 //' 
-//#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' \
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' \
 						version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df'\
 						language='*'\"")
 #pragma comment(lib,"comctl32.lib")
@@ -10,44 +10,50 @@
 WNDCLASSEX wc;
 
 
+HWND my_window;
+HWND MYBUTTON;
+HWND COMBO;
+HWND TEXTBOX;
+int farts;
+LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM WParam, LPARAM LParam)
+{
+	 PAINTSTRUCT ps; 
+    HDC hdc; 
+    switch (Message)
+    {
+        // Quit when we close the main window
+	case WM_CREATE:
+
+		break;
+    case WM_CLOSE:
+		CloseWindow(my_window);
+		ShowWindow(my_window,SW_HIDE);
+        PostQuitMessage(0);
+        return 0;
+		break;
+	/*case WM_PAINT: 
+		char str[32];
+		memset(str,0,32);
+		if (farts >= 0)
+			sprintf(str,"%i",farts);
+		else
+			sprintf(str,"<no selection>",farts);
+		hdc = BeginPaint(my_window, &ps); 
+		TextOut(hdc, 0, 0, str, 15); 
+		EndPaint(my_window, &ps); 
+		return 0L; 
+	case BN_CLICKED:
+		break;*/
+    }
+    
+    return DefWindowProc(Handle, Message, WParam, LParam);
+}
+
 
 namespace gui
 {
-	HWND hwnds[128];
-	HMENU menus[128];
-	unsigned int HWND_ID = 0;
-	unsigned int MENU_ID = 0;
-
-	HMENU menu_create()
-	{
-		return CreateMenu();
-	}
-
-	HMENU menu_append_submenu(HMENU menu, const char *text)
-	{
-		MENU_ID++;
-		HMENU submenu = CreatePopupMenu();
-		AppendMenu(menu, MF_STRING | MF_POPUP, submenu, text);
-		return submenu;
-	}
-
-	void submenu_append_string(HMENU submenu, const char *text)
-	{
-		MENU_ID++;
-		AppendMenu(submenu, MF_STRING, MENU_ID, text);
-	}
-
-	void submenu_append_separator(HMENU submenu)
-	{
-		MENU_ID++;
-		MENUITEMINFO info;
-		info.cbSize = sizeof(MENUITEMINFO);
-		info.fMask = MIIM_FTYPE;
-		info.fType = MFT_SEPARATOR;
-		info.cch = 0;
-		InsertMenuItem(submenu,MENU_ID,FALSE,&info);
-	}
-
+	static unsigned int TAB_ID = 1;
+	static unsigned int SUBMENUITEM_ID = 1;
 	HWND window_create(HWND parent, unsigned int width, unsigned int height, const char *text)
 	{
 		return CreateWindowExA(WS_EX_CLIENTEDGE,
@@ -58,6 +64,39 @@ namespace gui
         NULL, NULL, (HINSTANCE)GetWindowLong(parent, GWL_HINSTANCE), NULL);
 	}
 
+	HMENU menu_create()
+	{
+		return CreateMenu();
+	}
+
+	HMENU menu_append_submenu(HMENU menu, const char *text)
+	{
+		HMENU submenu = CreatePopupMenu();
+		AppendMenu(menu, MF_STRING | MF_POPUP, (UINT)submenu, text);
+		return submenu;
+	}
+
+	unsigned int submenu_append_string(HMENU submenu, const char *text)
+	{
+		AppendMenu(submenu, MF_STRING, ++SUBMENUITEM_ID, text);
+		return SUBMENUITEM_ID;
+	}
+
+	void submenu_append_separator(HMENU submenu)
+	{
+		MENUITEMINFO info;
+		info.cbSize = sizeof(MENUITEMINFO);
+		info.fMask = MIIM_FTYPE;
+		info.fType = MFT_SEPARATOR;
+		info.cch = 0;
+		InsertMenuItem(submenu,++SUBMENUITEM_ID,FALSE,&info);
+	}
+
+	void window_set_menu(HWND parent, HMENU menu)
+	{
+		SetMenu(parent,menu);
+	}
+
 	HWND tabcontroller_create(HWND parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
 	{
 		return CreateWindowExW(
@@ -66,35 +105,36 @@ namespace gui
                                 WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE, 
                                 x,y,width,height,   // set size in WM_SIZE message 
                                 parent,         // parent window 
-                                (HMENU)-1,   // edit control ID 
+                                (HMENU)++TAB_ID,   // edit control ID 
                                 (HINSTANCE) GetWindowLong(parent, GWL_HINSTANCE), 
                                 NULL);        // pointer not needed 
 	}
 
-	void tabcontroller_addtab(HWND parent, unsigned int index, const char *text)
+	HWND tabcontroller_addtab(HWND parent, unsigned int index, const char *text)
 	{
 		TCITEM tcitem;
 		tcitem.mask = TCIF_TEXT;
-		tcitem.pszText = (char*)text;
-		SendMessage(parent,(UINT) TCM_INSERTITEMA,(WPARAM) -1,(LPARAM) &tcitem);
+		tcitem.pszText =(char*)text;
+		SendMessage(parent,(UINT) TCM_INSERTITEMA,(WPARAM) index,(LPARAM) &tcitem);
+		return 0;
 	}
 
 	HWND combobox_create(HWND parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
 	{
+		
 		return CreateWindowExW(
 								0, WC_COMBOBOXW,   // predefined class 
                                 NULL,         // no window title 
 								CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE | WS_VSCROLL, 
                                 x,y,width,height,   // set size in WM_SIZE message 
                                 parent,         // parent window 
-                                (HMENU)-1,   // edit control ID 
+                                (HMENU)++TAB_ID,   // edit control ID 
                                 (HINSTANCE) GetWindowLong(parent, GWL_HINSTANCE), 
                                 NULL);        // pointer not needed 
 	}
 
 	int combobox_addstring(HWND combobox, const char *text)
 	{
-		//HWND_ID++;
 		SendMessage(combobox,(UINT) CB_ADDSTRING,(WPARAM) 0,(LPARAM) text);
 		return SendMessage(combobox,(UINT) CB_GETCOUNT,(WPARAM) 0,(LPARAM) 0)-1;
 	}
@@ -126,7 +166,7 @@ namespace gui
                                 WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | flags, 
                                 x,y,width,height,   // set size in WM_SIZE message 
                                 parent,         // parent window 
-                                (HMENU)-1,   // edit control ID 
+                                (HMENU)++TAB_ID,   // edit control ID 
                                 (HINSTANCE) GetWindowLong(parent, GWL_HINSTANCE), 
                                 NULL);        // pointer not needed 
 	}
@@ -140,75 +180,9 @@ namespace gui
 	{
 		return CreateWindowExA(0,WC_BUTTONA,text,
 			WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-			x,y,width,height,parent,(HMENU)-1,(HINSTANCE)GetWindowLong(parent, GWL_HINSTANCE),NULL);
+			x,y,width,height,parent,(HMENU)++TAB_ID,(HINSTANCE)GetWindowLong(parent, GWL_HINSTANCE),NULL);
 	}
 }
-
-
-
-HWND my_window;
-HWND MYBUTTON;
-HWND COMBO;
-HWND TEXTBOX;
-int farts;
-LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam)
-{
-	 PAINTSTRUCT ps; 
-    HDC hdc; 
-	WORD lo;
-	WORD hi;
-    switch (Message)
-    {
-        // Quit when we close the main window
-	case WM_CREATE:
-
-		break;
-    case WM_CLOSE:
-		CloseWindow(my_window);
-		ShowWindow(my_window,SW_HIDE);
-        PostQuitMessage(0);
-        return 0;
-		break;
-	case WM_COMMAND:
-		lo = LOWORD(lParam);
-		hi = HIWORD(lParam);
-		printf("--lParam %i\n",lParam);
-		printf("\t LOW = %i\n",lo);
-		printf("\tHIGH = %i\n",hi);
-		lo = LOWORD(wParam);
-		hi = HIWORD(wParam);
-		printf("--wParam--\n",wParam);
-		printf("\t LOW = %i\n",lo);
-		printf("\tHIGH = %i\n",hi);
-		printf("----------\n");
-		printf("\tbtn = %i\n",MYBUTTON);
-		if (hi == BN_CLICKED)
-		{
-			if ((HWND)lParam == MYBUTTON)
-				printf("it is my button!\n");
-			printf("CLICKED!\n");
-		}
-		break;
-	/*case WM_PAINT: 
-		char str[32];
-		memset(str,0,32);
-		if (farts >= 0)
-			sprintf(str,"%i",farts);
-		else
-			sprintf(str,"<no selection>",farts);
-		hdc = BeginPaint(my_window, &ps); 
-		TextOut(hdc, 0, 0, str, 15); 
-		EndPaint(my_window, &ps); 
-		return 0L; 
-	case BN_CLICKED:
-		break;*/
-    }
-    
-    return DefWindowProc(Handle, Message, wParam, lParam);
-}
-
-
-
 
 
 int main()
@@ -239,13 +213,13 @@ int main()
 
 	HMENU men = gui::menu_create();
 	HMENU sub = gui::menu_append_submenu(men,"&File");
-		gui::submenu_append_string(sub,"&New");
-		gui::submenu_append_string(sub,"&Open");
-		gui::submenu_append_string(sub,"&Save");
-		gui::submenu_append_string(sub,"Save &As");
-		gui::submenu_append_separator(sub);
-		gui::submenu_append_string(sub,"&Exit");
-	SetMenu(my_window,men);
+	gui::submenu_append_string(sub,"&New");
+	gui::submenu_append_string(sub,"&Open");
+	gui::submenu_append_string(sub,"&Save");
+	gui::submenu_append_string(sub,"Save &As");
+	gui::submenu_append_separator(sub);
+	gui::submenu_append_string(sub,"&Exit");
+	gui::window_set_menu(my_window, men);
 	
 	HWND tabbo = gui::tabcontroller_create(my_window, 300,32,300,200);
 	gui::tabcontroller_addtab(tabbo,0,"mooses");
@@ -279,7 +253,7 @@ int main()
 	Message.message = ~WM_QUIT;
 	while(Message.message != WM_QUIT)
 	{
-		while (GetMessage(&Message, NULL, 0, 0))//, PM_REMOVE))
+		while (PeekMessage(&Message, NULL, 0, 0, PM_REMOVE))
 		{
 			// If a message was waiting in the message queue, process it
 			TranslateMessage(&Message);
