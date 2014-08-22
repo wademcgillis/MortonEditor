@@ -1,6 +1,8 @@
 #include <windows.h>
 #include <cstdio>
 #include <CommCtrl.h>
+#include <map>
+
 //' 
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' \
 						version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df'\
@@ -14,21 +16,74 @@ template<class T, class U>
 class bimap
 {
 private:
-	std::map<std::pair<T,U>> map__key_value;
-	std::map<std::pair<U,T>> map__key_value;
+	T Tzero;
+	U Uzero;
+	std::map<T,U> map__key_value;
+	std::map<U,T> map__value_key;
 public:
-	template<class T, class U> void add<T,U>(T key, U value)
+	template<class T, class U> void set_Tzero(T key)
 	{
-		map__key_value.add(std::pair<T,U>(key,value));
-		map__value_key.add(std::pair<U,T>(value,key));
+		Tzero = key;
 	}
-	template<class T, class U>void drop_key<T>(T key);
-	template<class T, class U>void drop_value<U>(T value);
-	template<class T, class U>bool key_exists<T>(T key);
-	template<class T, class U>bool value_exists<U>(U value);
-	template<class T, class U>T key_from_value<U>(U value);
-	template<class T, class U>U value_from_key<T>(T key);
-}
+	template<class T, class U> void set_Uzero(U value)
+	{
+		Uzero = value;
+	}
+	template<class T, class U> void set(T key, U value)
+	{
+		if (!key_exists<T,U>(key))
+			map__key_value.insert(std::map<T,U>::value_type(key,value));
+		/*else
+		{
+			std::map<T,U>::iterator it;
+			it = map__key_value.find(key);
+			it->second = value;
+		}
+*/
+		if (!value_exists<T,U>(value))
+			map__value_key.insert(std::map<U,T>::value_type(value,key));
+/*		else
+		{
+			std::map<U,T>::iterator it;
+			it = map__value_key.find(value);
+			it->second = value;
+		}*/
+	}
+	template<class T, class U> void drop_key(T key);
+	template<class T, class U> void drop_value(U value);
+	template<class T, class U> bool key_exists(T key)
+	{
+		std::map<T,U>::iterator it;
+		it = map__key_value.find(key);
+		return (it != map__key_value.end());
+	}
+	template<class T, class U> bool value_exists(U value)
+	{
+		std::map<U,T>::iterator it;
+		it = map__value_key.find(value);
+		return (it != map__value_key.end());
+	}
+	template<class T, class U> T key_from_value(U value)
+	{
+		std::map<U,T>::iterator it;
+		it = map__value_key.find(value);
+		if (it != map__value_key.end())
+			return it->second;
+		else
+			return Tzero;
+	}
+	template<class T, class U> U value_from_key(T key)
+	{
+		std::map<T,U>::iterator it;
+		it = map__key_value.find(key);
+		if (it != map__key_value.end())
+			return it->second;
+		else
+			return Uzero;
+	}
+};
+
+typedef bimap<unsigned int, HWND> HWNDBIMAP;
 
 
 
@@ -272,6 +327,16 @@ LRESULT CALLBACK WndProc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam
 
 int main()
 {
+	HWNDBIMAP bob;
+	bob.set(5,0);
+	printf("%i\n",bob.value_from_key<unsigned int, HWND>(5));
+	Sleep(10000);
+	return 0;
+
+
+
+
+
 	InitCommonControlsEx(NULL);
 	HINSTANCE hInstance = (HINSTANCE)GetWindowLong(gui::get_handle(my_window), GWL_HINSTANCE);
 
