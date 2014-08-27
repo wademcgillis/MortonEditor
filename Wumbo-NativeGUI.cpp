@@ -17,7 +17,7 @@ namespace Wumbo
 		HWND hwnds[ELEMENTS];
 		HMENU menus[ELEMENTS];
 		int comboboxes_activeindex[ELEMENTS];
-		bool windowhandle_isopen[ELEMENTS];
+		int windowhandle_isopen[ELEMENTS];
 
 
 
@@ -45,18 +45,15 @@ namespace Wumbo
 			case WM_CREATE:
 				break;
 			case WM_CLOSE:
-				printf("Handle = %i\n",Handle);
-				DestroyWindow(Handle);//???????
+				DestroyWindow(Handle);
 				for(unsigned int i=0;i<=HWND_ID;i++)
 				{
 					if (hwnds[i] == Handle)
 					{
-						printf("IT'S A MATCH!\n");
-						windowhandle_isopen[HWND_ID] = false;
+						windowhandle_isopen[i] = false;
+						i = HWND_ID + 1;
 					}
 				}
-				//CloseWindow(Handle);//?????? Wumbo::NativeGUI::get_handle(my_window));
-				//ShowWindow(Handle,SW_HIDE);//?????? Wumbo::NativeGUI::get_handle(my_window),SW_HIDE);
 				//PostQuitMessage(0);
 				return 0;
 				break;
@@ -68,8 +65,6 @@ namespace Wumbo
 				if (wHI == BN_CLICKED)
 				{
 					buttons_clicked[button_click_count++] = (HWND)lParam;
-					//int index = Wumbo::NativeGUI::GUIMAP.key_from_value((HWND)lParam);
-					//Wumbo::NativeGUI::btnClicked[index] = true;
 				}
 				if (wHI == CBN_SELCHANGE)
 				{
@@ -202,6 +197,7 @@ namespace Wumbo
 
 		bool window_isopen(int window)
 		{
+			printf("windowhandle_isopen[%i] = %i\n",window,windowhandle_isopen[window]);
 			return windowhandle_isopen[window];
 		}
 
