@@ -17,7 +17,7 @@ namespace Wumbo
 		HWND hwnds[ELEMENTS];
 		HMENU menus[ELEMENTS];
 		int comboboxes_activeindex[ELEMENTS];
-		int windowhandle_isopen[ELEMENTS];
+		bool windowhandle_isopen[ELEMENTS];
 
 
 
@@ -197,7 +197,6 @@ namespace Wumbo
 
 		bool window_isopen(int window)
 		{
-			printf("windowhandle_isopen[%i] = %i\n",window,windowhandle_isopen[window]);
 			return windowhandle_isopen[window];
 		}
 
