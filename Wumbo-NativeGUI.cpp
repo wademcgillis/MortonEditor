@@ -112,7 +112,7 @@ namespace Wumbo
 				wmpainting_hdc = BeginPaint(Handle, &ps);
 				wmpainting_hdcMem = CreateCompatibleDC(wmpainting_hdc);
 
-				BitBlt(wmpainting_hdcMem,0,0,480,480,OFFSCREEN_HDC,0,0,SRCCOPY);
+				//BitBlt(wmpainting_hdcMem,0,0,480,480,OFFSCREEN_HDC,0,0,SRCCOPY);
 
 
 				RECT rect;
