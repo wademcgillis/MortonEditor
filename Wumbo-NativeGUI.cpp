@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <cstdio>
 #include <CommCtrl.h>
+#include <vector>
 
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' \
 						version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df'\
@@ -11,35 +12,54 @@ namespace Wumbo
 {
 	namespace NativeGUI
 	{
+		typedef struct {
+			HWND hwnd;
+			int id;
+			int value;
+		} ControlEvent;
+
 		const unsigned int ELEMENTS = 128;
 		const unsigned int MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK = 32;
 
+		HBITMAP images[ELEMENTS];
+		int IMAGE_ID = 0;
+
+		HIMAGELIST imagelists[ELEMENTS];
+		int IMAGELIST_ID = 0;
+
+		HTREEITEM treeitems[ELEMENTS];
+		int TREEITEM_ID = 0;
+
 		HWND hwnds[ELEMENTS];
-		HMENU menus[ELEMENTS];
-		int comboboxes_activeindex[ELEMENTS];
-		bool windowhandle_isopen[ELEMENTS];
-
-
-
-		HWND buttons_clicked[MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK];
-		unsigned int button_click_count;
-		int menus_clicked[MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK];
-		unsigned int menu_click_count;
-		HWND tabs_clicked[MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK];
-		unsigned int tab_click_count;
-
-		
-
 		int HWND_ID = 0;
+
+		HMENU menus[ELEMENTS];
 		int MENU_ID = 0;
+
+		std::vector<int> controlgroups[ELEMENTS];
+		unsigned int CONTROLGROUP_ID = 0;
+
+		int comboboxes_activeindex[ELEMENTS];
+		int listboxes_activeindex[ELEMENTS];
+		bool windowhandle_isopen[ELEMENTS];
+		bool handle_is_tab[ELEMENTS];
+		int treeviews_selectedindex[ELEMENTS];
+
+		ControlEvent controlevents[MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK];
+		unsigned int controlevents_count;
+
 		WNDCLASSEX wc;
+		HINSTANCE hinstance;
 
 		LRESULT CALLBACK handle_win32_event(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam) // WndProc
 		{
+			char stuff[32];
 			WORD wHI = HIWORD(wParam);
 			WORD wLO = LOWORD(wParam);
 			WORD lHI = HIWORD(lParam);
 			WORD lLO = LOWORD(lParam);
+			bool DEF = true;
+			NMTREEVIEW *TV;
 			switch (Message)
 			{
 			case WM_CREATE:
@@ -58,47 +78,99 @@ namespace Wumbo
 				return 0;
 				break;
 			case WM_COMMAND:
-				if (wHI == 0)
+				switch(wHI)
 				{
-					menus_clicked[Wumbo::NativeGUI::menu_click_count++] = wLO;
-				}
-				if (wHI == BN_CLICKED)
-				{
-					buttons_clicked[button_click_count++] = (HWND)lParam;
-				}
-				if (wHI == CBN_SELCHANGE)
-				{
+				case BN_CLICKED:
+					//printf("Button clicked! lParam: %u wLO: %i\n",lParam,wLO);
+					controlevents[controlevents_count++].hwnd = (HWND)lParam;
+					controlevents[controlevents_count++].id = wLO;
+					break;
+				case CBN_SELCHANGE:
+					//printf("CBN_SELCHANGE! lParam: %u wLO: %i\n",lParam);
 					for(unsigned int i=0;i<=HWND_ID;i++)
-					{
 						if (hwnds[i] == (HWND)lParam)
 							comboboxes_activeindex[i] = (int)SendMessage((HWND)lParam,CB_GETCURSEL,0,0);
-					}
+
+					for(unsigned int i=0;i<=HWND_ID;i++)
+						if (hwnds[i] == (HWND)lParam)
+							listboxes_activeindex[i] = (int)SendMessage((HWND)lParam,LB_GETCURSEL,0,0);
+					break;
+				default:
+					if (wHI != 768 && wHI != 1024)
+						printf("wHI not handled: %u\n",wHI);
+					break;
 				}
 				break;
 			case WM_NOTIFY:
-				if (((NMHDR*)lParam)->code == TCN_SELCHANGE)
+				unsigned int code = ((NMHDR*)lParam)->code;
+				HWND hwndFrom = ((NMHDR*)lParam)->hwndFrom;
+				if (code == TCN_SELCHANGE)
+					controlevents[controlevents_count++].hwnd = (HWND)SendMessage(((NMHDR*)lParam)->hwndFrom,TCM_GETCURSEL,0,0);
+				if (code == TVN_SELCHANGED)
 				{
-					tabs_clicked[tab_click_count++] = (HWND)SendMessage(((LPNMHDR)lParam)->hwndFrom,TCM_GETCURSEL,0,0);
+					TV = (NMTREEVIEW*)lParam;
+					int treeitemindex = -1;
+					for(unsigned int i=0;i<=TREEITEM_ID;i++)
+					{
+						if (treeitems[i] == TV->itemNew.hItem)
+						{
+							treeitemindex = i;
+							i = TREEITEM_ID + 1;
+						}
+					}
+					for(unsigned int i=0;i<=HWND_ID;i++)
+					{
+						if (hwnds[i] == hwndFrom)
+						{
+							treeviews_selectedindex[i] = treeitemindex;
+							i = HWND_ID+1;
+						}
+					}
 				}
 				break;
 			}
-			return DefWindowProc(Handle, Message, wParam, lParam);
+			if (DEF)
+				return DefWindowProc(Handle, Message, wParam, lParam);
+			else
+				return 0;
+		}
+
+		LRESULT CALLBACK mySubClassProc(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam, UINT_PTR SubClass, DWORD_PTR RefData)
+		{
+			char stuff[32];
+			switch(Message)
+			{
+			case WM_CTLCOLORSTATIC:
+				GetClassNameA((HWND)lParam,(LPSTR)&stuff,32);
+				if (strcmp(stuff,"Static") == 0)
+				{
+					RECT rect;
+					GetClientRect(Handle, &rect);
+					FillRect((HDC)wParam, &rect, GetSysColorBrush(-1));
+					return 0;
+				}
+				break;
+			case WM_COMMAND:// case WM_CTLCOLORSTATIC:
+				handle_win32_event(Handle, Message,wParam,lParam);
+				break;
+			}
+			return DefSubclassProc(Handle, Message, wParam, lParam);
 		}
 
 		void initialize()
 		{
 			InitCommonControlsEx(NULL);
-			HINSTANCE hInstance = (HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE);
+			hinstance = (HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE);
 
 			wc.cbSize        = sizeof(WNDCLASSEX);
 			wc.style         = 0;
 			wc.lpfnWndProc   = handle_win32_event;
 			wc.cbClsExtra    = 0;
 			wc.cbWndExtra    = 0;
-			wc.hInstance     = hInstance;
+			wc.hInstance     = hinstance;
 			wc.hIcon         = LoadIcon(NULL, IDI_APPLICATION);
 			wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-			wc.hbrBackground = (HBRUSH) (COLOR_BTNFACE + 1);
+			wc.hbrBackground = (HBRUSH) (COLOR_WINDOW);
 			wc.lpszMenuName  = NULL;
 			wc.lpszClassName = "WUMBOGUI_WIN32_WINDOW";
 			wc.hIconSm       = LoadIcon(NULL, IDI_APPLICATION);
@@ -109,19 +181,114 @@ namespace Wumbo
 
 		void handle_messages()
 		{
-			Wumbo::NativeGUI::button_click_count = 0;
-			Wumbo::NativeGUI::menu_click_count = 0;
-			Wumbo::NativeGUI::tab_click_count = 0;
+			Wumbo::NativeGUI::controlevents_count = 0;
 
 			MSG Message;
 			Message.message = ~WM_QUIT;
 			while (PeekMessage(&Message, NULL, 0, 0, PM_REMOVE))
 			{
-				// If a message was waiting in the message queue, process it
 				TranslateMessage(&Message);
 				DispatchMessage(&Message);
 			}
 		}
+
+		HWND get_handle(int element)
+		{
+			return hwnds[element];
+		}
+
+		void enable_control(int control)
+		{
+			EnableWindow(hwnds[control],true);
+		}
+
+		void disable_control(int control)
+		{
+			EnableWindow(hwnds[control],false);
+		}
+
+		void hide_control(int control)
+		{
+			ShowWindow(hwnds[control],SW_HIDE);
+		}
+
+		void show_control(int control)
+		{
+			ShowWindow(hwnds[control],SW_SHOW);
+		}
+
+		void control_sendtoback(int element)
+		{
+			SetWindowPos(hwnds[element],HWND_BOTTOM,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//												CONTROL GROUPS												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int controlgroup_create()
+		{
+			controlgroups[CONTROLGROUP_ID].push_back(1);
+			CONTROLGROUP_ID++;
+			return CONTROLGROUP_ID-1;
+		}
+
+		void controlgroup_addcontrol(int controlgroup, int control)
+		{
+			if (controlgroup >= CONTROLGROUP_ID)
+				return;
+			controlgroups[controlgroup].push_back(control);
+		}
+
+		void controlgroup_removecontrol(int controlgroup, int control)
+		{
+			if (controlgroup >= CONTROLGROUP_ID)
+				return;
+			for(int i=1;i<controlgroups[controlgroup].size();i++)
+				if (controlgroups[controlgroup][i] == control)
+					controlgroups[controlgroup].erase(controlgroups[controlgroup].begin()+i);
+		}
+
+		bool controlgroup_isvisible(int controlgroup)
+		{
+			if (controlgroup >= CONTROLGROUP_ID)
+				return 0;
+			return controlgroups[controlgroup][0];
+		}
+
+		void controlgroup_setvisible(int controlgroup, bool visible)
+		{
+			if (controlgroup >= CONTROLGROUP_ID)
+				return;
+			if (controlgroups[controlgroup][0] == visible)
+				return;
+			controlgroups[controlgroup][0] = visible;
+
+			if (controlgroups[controlgroup].size() == 1)
+				return;
+			if (visible)
+			{
+				for(int i=1;i<controlgroups[controlgroup].size();i++)
+					show_control(controlgroups[controlgroup].at(i));
+			}
+			else
+			{
+				for(int i=1;i<controlgroups[controlgroup].size();i++)
+					hide_control(controlgroups[controlgroup].at(i));
+			}
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													MENUS													  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
 
 		int menu_create()
 		{
@@ -164,27 +331,70 @@ namespace Wumbo
 
 		bool menu_check(int itemID)
 		{
-			for(unsigned int i=0;i<menu_click_count;i++)
-				if (menus_clicked[i] == itemID)
+			for(unsigned int i=0;i<controlevents_count;i++)
+				if (controlevents[i].id == itemID)
 					return true;
 			return false;
 		}
 
-		HWND get_handle(int element)
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													WINDOW													  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		void FIXWINDOWSIZE(HWND hwnd, int width, int height)
 		{
-			return hwnds[element];
+			RECT inner, outer;
+			GetWindowRect(hwnd, &outer);
+			GetClientRect(hwnd, &inner);
+			int dx = (outer.right - outer.left) - inner.right;
+			int dy = (outer.bottom - outer.top) - inner.bottom;
+			MoveWindow(hwnd, outer.left, outer.top, width+dx, height+dy, true);
 		}
 
 		unsigned int window_create(int parent, unsigned int width, unsigned int height, const char *text)
 		{
 			HWND_ID++;
-			hwnds[HWND_ID] = CreateWindowExA(WS_EX_CLIENTEDGE,
+			NONCLIENTMETRICS bob;
+			SystemParametersInfo(SPI_GETNONCLIENTMETRICS,sizeof(NONCLIENTMETRICS),&bob,NULL);
+			printf("BorderWidth: %i\n",bob.iBorderWidth);
+			printf("MenuHeight: %i\n",bob.iMenuHeight);
+			DWORD flags = 0;
+			DWORD superflags = 0;
+			if (parent != NULL)
+			{
+				printf("WE GOT A PARENT\n");
+				flags = WS_CAPTION;
+				superflags = WS_EX_TOOLWINDOW;
+			}
+			else
+			{
+				flags = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+				superflags = WS_EX_CLIENTEDGE;
+			}
+
+				hwnds[HWND_ID] = CreateWindowExA(superflags,
 					"WUMBOGUI_WIN32_WINDOW",
 					text,
-					WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+					flags,
 					CW_USEDEFAULT, CW_USEDEFAULT, width, height,
-					NULL, NULL, (HINSTANCE)GetWindowLong(hwnds[parent], GWL_HINSTANCE), NULL);
+					hwnds[parent], NULL, hinstance, NULL);
+			
+			/*hwnds[HWND_ID] = CreateWindowExA(WS_EX_TOOLWINDOW,
+					"WUMBOGUI_WIN32_WINDOW",
+					text,
+					flags,
+					CW_USEDEFAULT, CW_USEDEFAULT, width, height,
+					hwnds[parent], NULL, hinstance, NULL);*/
+
+			
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
 			ShowWindow(hwnds[HWND_ID],SW_NORMAL);
+			FIXWINDOWSIZE(hwnds[HWND_ID],width,height);
 			UpdateWindow(hwnds[HWND_ID]);
 			windowhandle_isopen[HWND_ID] = true;
 			return HWND_ID;
@@ -200,19 +410,31 @@ namespace Wumbo
 			return windowhandle_isopen[window];
 		}
 
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//														TABS												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
 		int tabcontroller_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
 		{
 			HWND_ID++;
-			//GUIMAP.
 			hwnds[HWND_ID] = CreateWindowExW(
-					0, WC_TABCONTROLW,   // predefined class 
-					NULL,         // no window title 
+					0, WC_TABCONTROLW, 
+					NULL,
 					WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE, 
-					x,y,width,height,   // set size in WM_SIZE message 
-					hwnds[parent],         // parent window 
-					(HMENU)HWND_ID,   // edit control ID 
-					(HINSTANCE) GetWindowLong(hwnds[parent], GWL_HINSTANCE), 
+					x,y,width,height, 
+					hwnds[parent],
+					(HMENU)HWND_ID, 
+					hinstance, 
 					NULL);
+			handle_is_tab[HWND_ID] = true;
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+			SetWindowSubclass(hwnds[HWND_ID], (SUBCLASSPROC)&mySubClassProc, 0, 0);
 			return HWND_ID;
 		}
 
@@ -229,24 +451,35 @@ namespace Wumbo
 
 		bool tab_check(int tab)
 		{
-			for(unsigned int i=0;i<tab_click_count;i++)
-				if (tabs_clicked[i] == hwnds[tab])
+			for(unsigned int i=0;i<controlevents_count;i++)
+				if (controlevents[i].hwnd == hwnds[tab])
 					return true;
 			return false;
 		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													COMBO BOX												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
 
 		int combobox_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
 		{
 			HWND_ID++;
 			hwnds[HWND_ID] = CreateWindowExW(
-									0, WC_COMBOBOXW,   // predefined class 
-									NULL,         // no window title 
+									0, WC_COMBOBOXW,
+									NULL, 
 									CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE | WS_VSCROLL, 
-									x,y,width,height,   // set size in WM_SIZE message 
-									hwnds[parent],         // parent window 
-									(HMENU)HWND_ID,   // edit control ID 
-									(HINSTANCE) GetWindowLong(hwnds[parent], GWL_HINSTANCE), 
-									NULL);        // pointer not needed 
+									x,y,width,height, 
+									hwnds[parent],
+									(HMENU)HWND_ID,
+									hinstance, 
+									NULL);
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
 			comboboxes_activeindex[HWND_ID] = -1;
 			return HWND_ID;
 		}
@@ -274,10 +507,106 @@ namespace Wumbo
 			SendMessage(hwnds[combobox],CB_SETCURSEL,index,0);
 		}
 
-		int textbox_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, bool readonly, bool multiline, bool hscroll, bool vscroll)
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													LIST BOX												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int listbox_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+		{
+			HWND_ID++;
+			hwnds[HWND_ID] = CreateWindowExW(
+									0, WC_LISTBOXW, 
+									L"clams", 
+									LBS_NOTIFY | LBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE | WS_VSCROLL | WS_BORDER, 
+									x,y,width,height, 
+									hwnds[parent], 
+									(HMENU)HWND_ID, 
+									hinstance, 
+									NULL); 
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+			listboxes_activeindex[HWND_ID] = -1;
+			return HWND_ID;
+		}
+
+		int listbox_addstring(int listbox, const char *text)
+		{
+			//HWND_ID++;
+			SendMessage(hwnds[listbox],(UINT) LB_ADDSTRING,(WPARAM) 0,(LPARAM) text);
+			return SendMessage(hwnds[listbox],(UINT) LB_GETCOUNT,(WPARAM) 0,(LPARAM) 0)-1;
+		}
+
+		void listbox_deletestring(int listbox, int index)
+		{
+			SendMessage(hwnds[listbox],(UINT) LB_DELETESTRING,(WPARAM) index,(LPARAM) 0);
+		}
+
+		int listbox_getselectedindex(int listbox)
+		{
+			return listboxes_activeindex[listbox];
+		}
+
+		void listbox_setselectedindex(int listbox, int index)
+		{
+			listboxes_activeindex[listbox] = index;
+			SendMessage(hwnds[listbox],LB_SETCURSEL,index,0);
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													TEXT													  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int text_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, const char *text)
 		{
 			HWND_ID++;
 			DWORD flags = 0;
+			/*if (readonly)
+				flags = flags | ES_READONLY;
+			if (multiline)
+				flags = flags | ES_MULTILINE;
+			if (hscroll)
+				flags = flags | WS_HSCROLL | ES_AUTOHSCROLL;
+			if (vscroll)
+				flags = flags | WS_VSCROLL | ES_AUTOVSCROLL;
+			if (border)
+				flags = flags | WS_BORDER;*/
+			hwnds[HWND_ID] = CreateWindowExA(
+									0, WC_STATICA, 
+									text,
+									WS_CHILD | WS_VISIBLE | ES_LEFT | flags, 
+									x,y,width,height, 
+									hwnds[parent], 
+									(HMENU)HWND_ID, 
+									hinstance, 
+									NULL); 
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+			return HWND_ID;
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													TEXT BOX												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int textbox_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, bool readonly, bool multiline, bool hscroll, bool vscroll, bool border)
+		{
+			HWND_ID++;
+			DWORD flags = 0;
+			flags = flags;
 			if (readonly)
 				flags = flags | ES_READONLY;
 			if (multiline)
@@ -286,15 +615,20 @@ namespace Wumbo
 				flags = flags | WS_HSCROLL | ES_AUTOHSCROLL;
 			if (vscroll)
 				flags = flags | WS_VSCROLL | ES_AUTOVSCROLL;
+			if (border)
+				flags = flags | WS_BORDER;
 			hwnds[HWND_ID] = CreateWindowExW(
-									0, WC_EDITW,   // predefined class 
-									NULL,         // no window title 
-									WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | flags, 
-									x,y,width,height,   // set size in WM_SIZE message 
-									hwnds[parent],         // parent window 
-									(HMENU)HWND_ID,   // edit control ID 
-									(HINSTANCE) GetWindowLong(hwnds[parent], GWL_HINSTANCE), 
-									NULL);        // pointer not needed 
+									0, WC_EDITW, 
+									NULL,
+									WS_CHILD | WS_VISIBLE | ES_LEFT | flags,// | WS_EX_TRANSPARENT, 
+									x,y,width,height, 
+									hwnds[parent], 
+									(HMENU)HWND_ID, 
+									hinstance, 
+									NULL); 
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
 			return HWND_ID;
 		}
 
@@ -310,23 +644,235 @@ namespace Wumbo
 			SendMessage(hwnds[parent], WM_GETTEXT, (WPARAM)length, (LPARAM)dest);
 		}
 
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													BUTTON BOX												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
 		int button_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, const char *text)
 		{
 			MENU_ID++;
 			HWND_ID++;
 			hwnds[HWND_ID] = CreateWindowExA(0,WC_BUTTONA,text,
-				WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-				x,y,width,height,hwnds[parent],(HMENU)HWND_ID,(HINSTANCE)GetWindowLong(hwnds[parent], GWL_HINSTANCE),NULL);
+				WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+				x,y,width,height,hwnds[parent],(HMENU)HWND_ID,(HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE),NULL);
+
+			
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
 			return HWND_ID;
 		}
 
 		bool button_check(int button)
 		{
-			for(unsigned int i=0;i<button_click_count;i++)
-				if (buttons_clicked[i] == hwnds[button])
+			for(unsigned int i=0;i<controlevents_count;i++)
+				if (controlevents[i].hwnd == hwnds[button])
 					return true;
 			return false;
-			//return btnClicked[button];
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													BUTTON BOX												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int groupbox_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height, const char *text)
+		{
+			MENU_ID++;
+			HWND_ID++;
+			hwnds[HWND_ID] = CreateWindowExA(0,WC_BUTTONA,text,
+				WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_GROUPBOX | WS_CLIPSIBLINGS,
+				x,y,width,height,hwnds[parent],(HMENU)HWND_ID,(HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE),NULL);
+
+			SetWindowPos(hwnds[HWND_ID],HWND_BOTTOM,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+			return HWND_ID;
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													UPDOWN													  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int updown_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+		{
+			MENU_ID++;
+			HWND_ID++;
+			hwnds[HWND_ID] = CreateWindowExA(0,UPDOWN_CLASS,NULL,
+				/*WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS,*/WS_CHILDWINDOW | WS_VISIBLE
+                              /*| UDS_AUTOBUDDY | UDS_SETBUDDYINT*/ | UDS_ALIGNRIGHT | UDS_ARROWKEYS | UDS_HOTTRACK,
+				x,y,width,height,hwnds[parent],(HMENU)HWND_ID,(HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE),NULL);
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+			return HWND_ID;
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													TREEVIEW												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int treeview_create(int parent, unsigned int x, unsigned int y, unsigned int width, unsigned int height)
+		{
+			HWND_ID++;
+			hwnds[HWND_ID] = CreateWindowExA(
+									0, WC_TREEVIEWA, 
+									"clams", 
+									TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | WS_CHILD | WS_VISIBLE | WS_BORDER, 
+									x,y,width,height, 
+									hwnds[parent], 
+									(HMENU)HWND_ID, 
+									hinstance, 
+									NULL); 
+
+			SendMessage(hwnds[HWND_ID], WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), TRUE);
+
+			//listboxes_activeindex[HWND_ID] = -1;
+			return HWND_ID;
+		}
+
+		int treeview_addstring(int parent, const char *text, int indentLevel, int image = -1)
+		{
+			TREEITEM_ID++;
+
+			TVITEM item; 
+			TVINSERTSTRUCT insert; 
+			static HTREEITEM hPrev = (HTREEITEM)TVI_FIRST; 
+			static HTREEITEM hPrevRootItem = NULL; 
+			static HTREEITEM hPrevLev2Item = NULL; 
+			HTREEITEM hti; 
+
+			item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE | TVIF_PARAM; 
+
+			item.pszText = (LPSTR)text; 
+			item.cchTextMax = strlen(text); 
+
+			item.iImage = image;//g_nDocument; 
+			item.iSelectedImage = image;//g_nDocument; 
+
+			// Save the heading level in the item's application-defined 
+			// data area. 
+			item.lParam = (LPARAM)indentLevel; 
+			insert.item = item; 
+			insert.hInsertAfter = hPrev; 
+
+			// Set the parent item based on the specified level. 
+			if (indentLevel == 1) 
+				insert.hParent = TVI_ROOT; 
+			else if (indentLevel == 2) 
+				insert.hParent = hPrevRootItem; 
+			else 
+				insert.hParent = hPrevLev2Item; 
+
+			// Add the item to the tree-view control. 
+			hPrev = (HTREEITEM)SendMessage(hwnds[parent], TVM_INSERTITEM, 0, (LPARAM)(LPTVINSERTSTRUCT)&insert); 
+
+			if (hPrev == NULL)
+				return NULL;
+
+			// Save the handle to the item. 
+			if (indentLevel == 1) 
+				hPrevRootItem = hPrev; 
+			else if (indentLevel == 2) 
+				hPrevLev2Item = hPrev; 
+
+			// The new item is a child item. Give the parent item a 
+			// closed folder bitmap to indicate it now has child items. 
+			if (indentLevel > 1)
+			{ 
+				hti = TreeView_GetParent(hwnds[parent], hPrev); 
+				item.mask = TVIF_IMAGE | TVIF_SELECTEDIMAGE; 
+				item.hItem = hti; 
+				item.iImage = -1;//g_nClosed; 
+				item.iSelectedImage = -1;//g_nClosed; 
+				TreeView_SetItem(hwnds[parent], &item);
+			} 
+
+			treeitems[TREEITEM_ID] = hPrev;
+			if (indentLevel == 1)
+			{//IDI_
+				TVITEM tvitem;
+				tvitem.mask = TVIF_STATE;
+				tvitem.hItem = hPrev;
+				tvitem.stateMask = TVIS_STATEIMAGEMASK | TVIS_BOLD | TVIS_EXPANDED;
+				tvitem.state = TVIS_STATEIMAGEMASK | TVIS_BOLD | TVIS_EXPANDED;
+				tvitem.lParam = 1;
+				SendMessage(hwnds[parent],TVM_SETITEM,0,(LPARAM)&tvitem);
+			}
+
+			return TREEITEM_ID; 
+		}
+
+		void treeview_setimagelist(int parent, int imagelist)
+		{
+			TreeView_SetImageList(hwnds[parent], imagelists[imagelist], TVSIL_NORMAL); 
+		}
+
+		int treeview_getselecteditem(int parent)
+		{
+			if (parent <= HWND_ID)
+				return treeviews_selectedindex[parent];
+			return -1;
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													IMAGE LIST												  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int imagelist_create(int width, int height)
+		{
+			IMAGELIST_ID++;
+			imagelists[IMAGELIST_ID] = ImageList_Create(width,height,ILC_COLOR,1,1);
+			return IMAGELIST_ID;
+		}
+		int imagelist_addimage(int imagelist, const unsigned char *pointer)
+		{
+			int w, h;
+			ImageList_GetIconSize(imagelists[imagelist],&w,&h);
+			for(unsigned int i=0;i<w*h;i++)
+				((unsigned int*)pointer)[i] = (((unsigned int*)pointer)[i] & 0xFF000000) << 0 | (((unsigned int*)pointer)[i] & 0x00FF0000) >> 16 | (((unsigned int*)pointer)[i] & 0x0000FF00) >> 0 | (((unsigned int*)pointer)[i] & 0x000000FF) << 16;
+			BITMAPINFOHEADER header;
+			header.biSize = sizeof(BITMAPINFOHEADER);
+			header.biWidth = w;
+			header.biHeight = -h;
+			header.biPlanes = 1;
+			header.biBitCount = 32;
+			header.biCompression = BI_RGB;
+			header.biSizeImage = 0;
+			header.biXPelsPerMeter = 16;
+			header.biYPelsPerMeter = 16;
+			header.biClrUsed = 0;
+			header.biClrImportant = 0;
+			BITMAPINFO info;
+			info.bmiHeader = header;
+			info.bmiColors->rgbBlue = 0;
+			info.bmiColors->rgbGreen = 0;
+			info.bmiColors->rgbRed = 0;
+			info.bmiColors->rgbReserved = 0;
+			HBITMAP bitmap = CreateDIBitmap(GetDC(NULL), &header, CBM_INIT, (void*)pointer, &info, DIB_RGB_COLORS);
+			int v = ImageList_Add(imagelists[imagelist],bitmap,NULL);
+			DeleteObject(bitmap);
+			for(unsigned int i=0;i<w*h;i++)
+				((unsigned int*)pointer)[i] = (((unsigned int*)pointer)[i] & 0xFF000000) << 0 | (((unsigned int*)pointer)[i] & 0x00FF0000) >> 16 | (((unsigned int*)pointer)[i] & 0x0000FF00) >> 0 | (((unsigned int*)pointer)[i] & 0x000000FF) << 16;
+			return v;
 		}
 	}
 }
