@@ -83,8 +83,9 @@ namespace Wumbo
 		extern int imagelist_create(int width, int height);
 		extern int imagelist_addimage(int imagelist, int image);
 
-		extern int image_createfromptr(unsigned char *ptr, unsigned int width, unsigned int height);
-		extern int image_createfromptrsubrect(unsigned char *ptr, unsigned int width, unsigned int height, unsigned int destX, unsigned int destY, unsigned int destWidth, unsigned int destHeight);
+		extern int image_createfromptr(const unsigned char *ptr, unsigned int width, unsigned int height);
+		extern int image_createfromptrsubrect(const unsigned char *ptr, unsigned int width, unsigned int height, unsigned int destX, unsigned int destY, unsigned int destWidth, unsigned int destHeight);
+		extern int image_delete(int image);
 		/*extern int listbox_addstring(int listbox, const char *text);
 		extern void listbox_deletestring(int listbox, int index);
 		extern int listbox_getselectedindex(int listbox);

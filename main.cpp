@@ -9,15 +9,6 @@ int farts;
 
 #include "stb_image.h"
 
-unsigned char *AllocImageDataSubrect32bpp(const unsigned char* ptr, unsigned int sourceWidth, unsigned int sourceHeight, unsigned int x, unsigned int y, unsigned int destWidth, unsigned int destHeight)
-{
-	unsigned int *newdata = new unsigned int[destWidth*destHeight];
-	for(unsigned int i=0;i<destWidth;i++)
-		for(unsigned int j=0;j<destHeight;j++)
-			newdata[destWidth*j + i] = ((unsigned int*)ptr)[sourceWidth*(j+y) + x+i];
-	return (unsigned char*)newdata;
-}
-
 int main()
 {
 	Wumbo::NativeGUI::initialize();
@@ -32,12 +23,8 @@ int main()
 	int imagelist = Wumbo::NativeGUI::imagelist_create(24,24);
 	int w,h;
 	const unsigned char *ptr = stbi_load("strip.png",&w,&h,NULL,false);
-	unsigned char *data1 = AllocImageDataSubrect32bpp(ptr,w,h,0,0,24,24);
-	unsigned char *data2 = AllocImageDataSubrect32bpp(ptr,w,h,24,0,24,24);
-	int image1 = Wumbo::NativeGUI::imagelist_addimage(imagelist,data1);
-	int image2 = Wumbo::NativeGUI::imagelist_addimage(imagelist,data2);
-	delete data1;
-	delete data2;
+	int img_bird = Wumbo::NativeGUI::imagelist_addimage(imagelist,Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,0,0,24,24));
+	int img_sign = Wumbo::NativeGUI::imagelist_addimage(imagelist,Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,24,0,24,24));
 
 	int men = Wumbo::NativeGUI::menu_create();
 	int sub = Wumbo::NativeGUI::menu_append_submenu(men,"&File");
@@ -58,8 +45,8 @@ int main()
 		Wumbo::NativeGUI::treeview_setimagelist(OBJECTS_TREE,imagelist);
 		printf("tree = %i\n",Wumbo::NativeGUI::get_handle(OBJECTS_TREE));
 		Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Talkers",1);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Bird",2,image1);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Sign",2,image2);
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Bird",2,img_bird);
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Sign",2,img_sign);
 			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Gravestone",2);
 			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Scribble",2);
 		Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Decorations",1);

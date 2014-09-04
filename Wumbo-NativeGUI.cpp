@@ -843,16 +843,28 @@ namespace Wumbo
 			imagelists[IMAGELIST_ID] = ImageList_Create(width,height,ILC_COLOR,1,1);
 			return IMAGELIST_ID;
 		}
-		int imagelist_addimage(int imagelist, const unsigned char *pointer)
+		int imagelist_addimage(int imagelist, int image)
 		{
-			int w, h;
-			ImageList_GetIconSize(imagelists[imagelist],&w,&h);
-			for(unsigned int i=0;i<w*h;i++)
-				((unsigned int*)pointer)[i] = (((unsigned int*)pointer)[i] & 0xFF000000) << 0 | (((unsigned int*)pointer)[i] & 0x00FF0000) >> 16 | (((unsigned int*)pointer)[i] & 0x0000FF00) >> 0 | (((unsigned int*)pointer)[i] & 0x000000FF) << 16;
+			return ImageList_Add(imagelists[imagelist],images[image],NULL);
+		}
+
+		//	***********************************************************************************************************
+		//																											  *
+		//																											  *
+		//													IMAGES													  *
+		//																											  *
+		//																											  *
+		//	***********************************************************************************************************
+
+		int image_createfromptr(const unsigned char *ptr, unsigned int width, unsigned int height)
+		{
+			IMAGE_ID++;
+			for(unsigned int i=0;i<width*height;i++)
+				((unsigned int*)ptr)[i] = (((unsigned int*)ptr)[i] & 0xFF000000) << 0 | (((unsigned int*)ptr)[i] & 0x00FF0000) >> 16 | (((unsigned int*)ptr)[i] & 0x0000FF00) >> 0 | (((unsigned int*)ptr)[i] & 0x000000FF) << 16;
 			BITMAPINFOHEADER header;
 			header.biSize = sizeof(BITMAPINFOHEADER);
-			header.biWidth = w;
-			header.biHeight = -h;
+			header.biWidth = width;
+			header.biHeight = -height;
 			header.biPlanes = 1;
 			header.biBitCount = 32;
 			header.biCompression = BI_RGB;
@@ -867,12 +879,25 @@ namespace Wumbo
 			info.bmiColors->rgbGreen = 0;
 			info.bmiColors->rgbRed = 0;
 			info.bmiColors->rgbReserved = 0;
-			HBITMAP bitmap = CreateDIBitmap(GetDC(NULL), &header, CBM_INIT, (void*)pointer, &info, DIB_RGB_COLORS);
-			int v = ImageList_Add(imagelists[imagelist],bitmap,NULL);
-			DeleteObject(bitmap);
-			for(unsigned int i=0;i<w*h;i++)
-				((unsigned int*)pointer)[i] = (((unsigned int*)pointer)[i] & 0xFF000000) << 0 | (((unsigned int*)pointer)[i] & 0x00FF0000) >> 16 | (((unsigned int*)pointer)[i] & 0x0000FF00) >> 0 | (((unsigned int*)pointer)[i] & 0x000000FF) << 16;
+			images[IMAGE_ID] = CreateDIBitmap(GetDC(NULL), &header, CBM_INIT, (void*)ptr, &info, DIB_RGB_COLORS);
+			//DeleteObject(bitmap);
+			for(unsigned int i=0;i<width*height;i++)
+				((unsigned int*)ptr)[i] = (((unsigned int*)ptr)[i] & 0xFF000000) << 0 | (((unsigned int*)ptr)[i] & 0x00FF0000) >> 16 | (((unsigned int*)ptr)[i] & 0x0000FF00) >> 0 | (((unsigned int*)ptr)[i] & 0x000000FF) << 16;
+			return IMAGE_ID;
+		}
+		int image_createfromptrsubrect(const unsigned char *ptr, unsigned int width, unsigned int height, unsigned int destX, unsigned int destY, unsigned int destWidth, unsigned int destHeight)
+		{
+			unsigned int *newptr = new unsigned int[destWidth*destHeight];
+			for(unsigned int i=0;i<destWidth;i++)
+				for(unsigned int j=0;j<destHeight;j++)
+					newptr[destWidth*j + i] = ((unsigned int*)ptr)[width*(j+destY) + destX+i];
+			int v = image_createfromptr((unsigned char*)newptr,destWidth,destHeight);
+			delete newptr;
 			return v;
+		}
+		void image_delete(int image)
+		{
+			DeleteObject(images[image]);
 		}
 	}
 }
