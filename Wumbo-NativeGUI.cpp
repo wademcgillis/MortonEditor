@@ -7,6 +7,7 @@
 						version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df'\
 						language='*'\"")
 #pragma comment(lib,"comctl32.lib")
+#pragma comment(lib,"msimg32.lib")
 
 namespace Wumbo
 {
@@ -20,6 +21,8 @@ namespace Wumbo
 
 		const unsigned int ELEMENTS = 128;
 		const unsigned int MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK = 32;
+
+		bool wmpainting;
 
 		HBITMAP images[ELEMENTS];
 		int IMAGE_ID = 0;
@@ -48,8 +51,20 @@ namespace Wumbo
 		ControlEvent controlevents[MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK];
 		unsigned int controlevents_count;
 
+		void (*paintFuncPtr)(void);
+
 		WNDCLASSEX wc;
 		HINSTANCE hinstance;
+
+		HDC wmpainting_hdc;
+		HDC wmpainting_hdcMem;
+		BLENDFUNCTION wmpainting_bfn;
+		HGDIOBJ wmpainting_oldBitmap;
+
+		void set_paint_function(void (*a)(void))
+		{
+			paintFuncPtr = a;
+		}
 
 		LRESULT CALLBACK handle_win32_event(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam) // WndProc
 		{
@@ -63,6 +78,62 @@ namespace Wumbo
 			switch (Message)
 			{
 			case WM_CREATE:
+				break;
+			case WM_PAINT:
+#if 0
+				PAINTSTRUCT ps;
+				HDC hdc;
+				BITMAP bitmap;
+				HDC hdcMem;
+				HGDIOBJ oldBitmap;
+				HGDIOBJ oldBitmap2;
+
+				hdc = BeginPaint(Handle, &ps);
+
+				hdcMem = CreateCompatibleDC(hdc);
+				
+
+
+				oldBitmap = SelectObject(hdcMem, images[2]);
+				GetObject(images[2], sizeof(bitmap), &bitmap);
+				BitBlt(hdc, 400, 100, bitmap.bmWidth, bitmap.bmHeight, hdcMem, 0, 0, SRCCOPY);
+				BitBlt(hdc, 500, 100, bitmap.bmWidth, bitmap.bmHeight, hdcMem, 0, 0, SRCCOPY);
+				SelectObject(hdcMem, oldBitmap);
+
+
+				
+
+
+				DeleteDC(hdcMem);
+
+				EndPaint(Handle, &ps);
+#else
+				PAINTSTRUCT ps;
+				wmpainting_hdc = BeginPaint(Handle, &ps);
+				wmpainting_hdcMem = CreateCompatibleDC(wmpainting_hdc);
+
+				BitBlt(wmpainting_hdcMem,0,0,480,480,OFFSCREEN_HDC,0,0,SRCCOPY);
+
+
+				RECT rect;
+				rect.left = 200;
+				rect.top = 0;
+				rect.right = rect.left + 480;
+				rect.bottom = rect.top + 480;
+				HBRUSH brush;
+				brush = CreateSolidBrush(0x00FF00FF);
+				//DeleteO
+				FillRect(wmpainting_hdc, &rect, brush);
+				DeleteObject(brush);
+
+				wmpainting = true;
+				if (paintFuncPtr != NULL)
+					paintFuncPtr();
+				wmpainting = false;
+
+				DeleteDC(wmpainting_hdcMem);
+				EndPaint(Handle, &ps);
+#endif
 				break;
 			case WM_CLOSE:
 				DestroyWindow(Handle);
@@ -159,6 +230,13 @@ namespace Wumbo
 
 		void initialize()
 		{
+			wmpainting = false;
+			paintFuncPtr = NULL;
+			wmpainting_bfn.BlendOp = AC_SRC_OVER;
+			wmpainting_bfn.BlendFlags = 0;
+			wmpainting_bfn.SourceConstantAlpha = 255;
+			wmpainting_bfn.AlphaFormat = AC_SRC_ALPHA;
+
 			InitCommonControlsEx(NULL);
 			hinstance = (HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE);
 
@@ -894,6 +972,24 @@ namespace Wumbo
 			int v = image_createfromptr((unsigned char*)newptr,destWidth,destHeight);
 			delete newptr;
 			return v;
+		}
+		void image_draw(int image, int x, int y)
+		{
+			BITMAP bitmap;
+			wmpainting_oldBitmap = SelectObject(wmpainting_hdcMem, images[image]);
+			GetObject(images[image], sizeof(bitmap), &bitmap);
+			AlphaBlend(wmpainting_hdc, x,y, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			//AlphaBlend(wmpainting_hdc, 500, 100, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			SelectObject(wmpainting_hdcMem, wmpainting_oldBitmap);
+
+			return;
+			if (!wmpainting)
+				return;
+			//BITMAP bitmap;
+			wmpainting_oldBitmap = SelectObject(wmpainting_hdcMem, images[image]);
+			GetObject(images[image], sizeof(bitmap), &bitmap);
+			AlphaBlend(wmpainting_hdc, x, y, bitmap.bmWidth, bitmap.bmHeight,wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			SelectObject(wmpainting_hdcMem, wmpainting_oldBitmap);
 		}
 		void image_delete(int image)
 		{

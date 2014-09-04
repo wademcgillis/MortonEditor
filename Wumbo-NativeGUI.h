@@ -5,6 +5,8 @@ namespace Wumbo
 {
 	namespace NativeGUI
 	{
+		extern void set_paint_function(void (*a)(void));
+
 		extern void initialize();
 		extern void handle_messages();
 
@@ -85,6 +87,9 @@ namespace Wumbo
 
 		extern int image_createfromptr(const unsigned char *ptr, unsigned int width, unsigned int height);
 		extern int image_createfromptrsubrect(const unsigned char *ptr, unsigned int width, unsigned int height, unsigned int destX, unsigned int destY, unsigned int destWidth, unsigned int destHeight);
+
+		extern void image_draw(int image, int x, int y);
+
 		extern int image_delete(int image);
 		/*extern int listbox_addstring(int listbox, const char *text);
 		extern void listbox_deletestring(int listbox, int index);
