@@ -11,23 +11,115 @@ int farts;
 
 
 
-int img_bird, img_sign;
+#include "C:\\LD29\\SOURCE\\MortonLevelData.h"
+
+int img_bird, img_sign, img_gravestone, img_scribble, img_tree, img_fence,
+	img_rock, img_dirt, img_spike, img_light, img_brick, img_brickwindow,
+	img_stairsup, img_stairsdown, img_hole, img_door, img_selector[2];
+
+MortonLevelData mortondata;
+MortonTile *selectedTile;
+int selectedTileX, selectedTileY;
+
+
+HDC offscreenDC;
+HBITMAP offscreenBitmap;
+
+void refresh_tiles();
 
 void paintfunc()
 {
+	Wumbo::NativeGUI::paint_DC(offscreenDC,200,0,480,480);//
+}
+
+void refresh_tiles()
+{
+	Wumbo::NativeGUI::paint_setDC(offscreenDC);
+	for(unsigned int i=0;i<400;i+=2)
+		Wumbo::NativeGUI::paint_rectangle(24*(i%20 + (i/20)%2),24*(i/20),24,24,0x00DDDDDD);
+	for(unsigned int i=1;i<400;i+=2)
+		Wumbo::NativeGUI::paint_rectangle(24*(i%20 - (i/20)%2),24*(i/20),24,24,0x00BBBBBB);
+
 	static int xx = 200;
 	static int yy = 0;
-	yy++;
-	xx++;
-	Wumbo::NativeGUI::image_draw(img_sign,xx,yy);
+	for(unsigned int i=0;i<15;i++)
+		for(unsigned int j=0;j<15;j++)
+		{
+			MortonTile *tile = mortondata.get(i,j);
+			unsigned short type = tile->type;
+			switch(type)
+			{
+			case TILE_TREE:
+				Wumbo::NativeGUI::paint_image(img_tree,24*i,24*j);
+				break;
+			case TILE_FENCE:
+				Wumbo::NativeGUI::paint_image(img_fence,24*i,24*j);
+				break;
+			case TILE_HOLE:
+				Wumbo::NativeGUI::paint_image(img_hole,24*i,24*j,tile->width,tile->height);
+				break;
+			case TILE_ROCK:
+				Wumbo::NativeGUI::paint_image(img_rock,24*i,24*j);
+				break;
+			case TILE_SPIKE:
+				Wumbo::NativeGUI::paint_image(img_spike,24*i,24*j);
+				break;
+			case TILE_DIRT:
+				Wumbo::NativeGUI::paint_image(img_dirt,24*i,24*j);
+				break;
+			case TILE_BRICK:
+				Wumbo::NativeGUI::paint_image(img_brick,24*i,24*j);
+				break;
+			case TILE_BRICKWINDOW:
+				Wumbo::NativeGUI::paint_image(img_brickwindow,24*i,24*j);
+				break;
+			case TILE_TALKER:
+				if (strcmp(tile->strings[0].c_str(),"bird") == 0)
+					Wumbo::NativeGUI::paint_image(img_bird,24*i,24*j);
+				break;
+			}
+		}
+	static int tick = 0;
+	tick++;
+	if (selectedTile != NULL)
+		Wumbo::NativeGUI::paint_image(img_selector[(tick/10) % 2],24*selectedTileX,24*selectedTileY);
+	Wumbo::NativeGUI::paint_resetDC();
+	RECT rect;
+	rect.left = 200;
+	rect.top = 0;
+	rect.right = 680;
+	rect.bottom = 480;
+	InvalidateRect(Wumbo::NativeGUI::get_handle(my_window),&rect,FALSE);
 }
+
 
 int main()
 {
+	mortondata.loadClassic("C:\\LD29\\SOURCE\\Rooms\\world.oel");
 	Wumbo::NativeGUI::initialize();
 	Wumbo::NativeGUI::set_paint_function(paintfunc);
 
-	my_window = Wumbo::NativeGUI::window_create(NULL,960,480,"ZOOBERF");
+	my_window = Wumbo::NativeGUI::window_create(NULL,880,480,"ZOOBERF");
+
+
+
+
+
+
+
+
+	offscreenDC = CreateCompatibleDC(GetDC(Wumbo::NativeGUI::get_handle(my_window)));
+	offscreenBitmap = CreateCompatibleBitmap(GetDC(Wumbo::NativeGUI::get_handle(my_window)), 480, 480);
+	SelectObject(offscreenDC, offscreenBitmap);
+	//offscreenDC_src = CreateCompatibleDC(offscreenDC_dest);
+
+
+
+
+
+
+
+
 	printf("my_window handle = %i\n",Wumbo::NativeGUI::get_handle(my_window));
 
 	/*int OBJECTSELECT_WINDOW = Wumbo::NativeGUI::window_create(my_window,240,360,"Add Object");
@@ -37,10 +129,25 @@ int main()
 	int imagelist = Wumbo::NativeGUI::imagelist_create(24,24);
 	int w,h;
 	const unsigned char *ptr = stbi_load("strip.png",&w,&h,NULL,false);
-	img_bird = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,0,0,24,24);
-	img_sign = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,24,0,24,24);
-	int imgls_bird = Wumbo::NativeGUI::imagelist_addimage(imagelist,img_bird);
-	int imgls_sign = Wumbo::NativeGUI::imagelist_addimage(imagelist,img_sign);
+	img_selector[0] = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			0,0,24,24);
+	img_selector[1] = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			24,0,24,24);
+	img_bird = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			48,0,24,24);
+	img_sign = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			72,0,24,24);
+	img_gravestone = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,	96,0,24,24);
+	img_scribble = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,		120,0,24,24);
+	img_tree = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			144,0,24,24);
+	img_fence = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,		168,0,24,24);
+	img_rock = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			192,0,24,24);
+	img_dirt = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			216,0,24,24);
+	img_spike = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,		240,0,24,24);
+	img_light = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,		264,0,24,24);
+	img_brick = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,		288,0,24,24);
+	img_brickwindow = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,	312,0,24,24);
+	img_stairsup = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,		336,0,24,24);
+	img_stairsdown = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,	360,0,24,24);
+	img_hole = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			384,0,24,24);
+	img_door = Wumbo::NativeGUI::image_createfromptrsubrect(ptr,480,24,			408,0,24,24);
+	//int imgls_
 	int men = Wumbo::NativeGUI::menu_create();
 	int sub = Wumbo::NativeGUI::menu_append_submenu(men,"&File");
 		int sub2 = Wumbo::NativeGUI::menu_append_submenu(sub,"&New");
@@ -52,46 +159,31 @@ int main()
 		int MENU_EXIT = Wumbo::NativeGUI::submenu_append_string(sub,"&Exit");
 	Wumbo::NativeGUI::window_set_menu(my_window, men);
 
-	//int tab = my_window;
 	int tab = Wumbo::NativeGUI::tabcontroller_create(my_window,0,0,200,480);
 	int OBJECTS_TAB = Wumbo::NativeGUI::tabcontroller_addtab(tab,0,"Objects");
 	int OBJECTS_GROUP = Wumbo::NativeGUI::controlgroup_create();
-		int OBJECTS_TREE = Wumbo::NativeGUI::treeview_create(tab,8,30,180,420);
+		int OBJECTS_TREE = Wumbo::NativeGUI::treeview_create(tab,8,30,180,440);
 		Wumbo::NativeGUI::treeview_setimagelist(OBJECTS_TREE,imagelist);
 		printf("tree = %i\n",Wumbo::NativeGUI::get_handle(OBJECTS_TREE));
 		Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Talkers",1);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Bird",2,imgls_bird);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Sign",2,imgls_sign);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Gravestone",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Scribble",2);
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Bird",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_bird));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Sign",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_sign));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Gravestone",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_gravestone));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Scribble",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_scribble));
 		Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Decorations",1);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Tree",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Fence",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Rock",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Dirt",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Spike",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Light",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Brick Wall",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Brick Window",2);
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Tree",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_tree));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Fence",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_fence));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Rock",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_rock));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Dirt",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_dirt));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Spike",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_spike));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Light",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_light));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Brick Wall",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_brick));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Brick Window",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_brickwindow));
 		Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Transports",1);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Door",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Stairs",2);
-			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Hole",2);
-		/*int OBJECTS_LIST = Wumbo::NativeGUI::listbox_create(tab,8,60,180,410);
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Morton");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Fence");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Tree");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Spike");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Light");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Rock");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Dirt");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Block");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Brick");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"BrickWindow");
-			Wumbo::NativeGUI::listbox_addstring(OBJECTS_LIST,"Transport");
-		Wumbo::NativeGUI::controlgroup_addcontrol(OBJECTS_GROUP,OBJECTS_LIST);*/
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Door",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_door));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Stairs",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_stairsdown));
+			Wumbo::NativeGUI::treeview_addstring(OBJECTS_TREE,"Hole",2,Wumbo::NativeGUI::imagelist_addimage(imagelist,img_hole));
 		Wumbo::NativeGUI::controlgroup_addcontrol(OBJECTS_GROUP,OBJECTS_TREE);
-		//Wumbo::NativeGUI::controlgroup_addcontrol(OBJECTS_GROUP,OBJECTS_ADDBUTTON);
 		Wumbo::NativeGUI::controlgroup_setvisible(OBJECTS_GROUP,true);
 	int ROOMINFO_TAB = Wumbo::NativeGUI::tabcontroller_addtab(tab,1,"Room Info");
 	int ROOMINFO_GROUP = Wumbo::NativeGUI::controlgroup_create();
@@ -125,9 +217,9 @@ int main()
 
 	
 
-	int GX = 960-200+8;
+	int GX = 880-200+8;
 	int GY = 8;
-	Wumbo::NativeGUI::groupbox_create(my_window,GX,GY,200-12,480-32,"Instance Info");
+	Wumbo::NativeGUI::groupbox_create(my_window,GX,GY,200-12,480-16,"Instance Info");
 
 	Wumbo::NativeGUI::text_create(my_window,GX+16,GY+24,34,20,"Model:");
 	int COMBO_TYPE = Wumbo::NativeGUI::combobox_create(my_window,GX+16+40,GY+22,120,32);
@@ -152,6 +244,8 @@ int main()
 	//Wumbo::NativeGUI::combobox_addstring(COMBO_TYPE,"Bird");
 
 	//Wumbo::NativeGUI::combobox_addstring*/
+
+	
 	
 	while(Wumbo::NativeGUI::window_isopen(my_window))
 	{
@@ -176,13 +270,14 @@ int main()
 			Wumbo::NativeGUI::controlgroup_setvisible(OBJECTS_GROUP,false);
 			Wumbo::NativeGUI::controlgroup_setvisible(ROOMINFO_GROUP,true);
 		}
-		Sleep(10);
-		RECT rect;
-		rect.left = 200;
-		rect.top = 0;
-		rect.right = 680;
-		rect.bottom = 480;
-		InvalidateRect(Wumbo::NativeGUI::get_handle(my_window),&rect,FALSE);
+		if (Wumbo::NativeGUI::mouse_left_pressed(200 + 0, 0 + 0, 480, 480))
+		{
+			selectedTileX = (Wumbo::NativeGUI::mouse_x()-200)/24;
+			selectedTileY = (Wumbo::NativeGUI::mouse_y())/24;
+			selectedTile = mortondata.get(selectedTileX,selectedTileY);
+		}
+		refresh_tiles();
+		Sleep(33);
 	}
 	return 0;
 

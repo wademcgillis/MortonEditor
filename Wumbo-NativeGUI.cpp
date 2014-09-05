@@ -3,6 +3,7 @@
 #include <CommCtrl.h>
 #include <vector>
 
+
 #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' \
 						version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df'\
 						language='*'\"")
@@ -18,6 +19,8 @@ namespace Wumbo
 			int id;
 			int value;
 		} ControlEvent;
+
+		void paint_rectangle(int,int,int,int,unsigned int);
 
 		const unsigned int ELEMENTS = 128;
 		const unsigned int MAX_ELEMENTS_TO_BE_UPDATED_PER_TICK = 32;
@@ -56,14 +59,53 @@ namespace Wumbo
 		WNDCLASSEX wc;
 		HINSTANCE hinstance;
 
-		HDC wmpainting_hdc;
-		HDC wmpainting_hdcMem;
+		HDC imagedraw_srcHDC;
+		HDC imagedraw_destHDC;
 		BLENDFUNCTION wmpainting_bfn;
-		HGDIOBJ wmpainting_oldBitmap;
+
+		HBRUSH rectbrush;
+		unsigned int rectcolor;
 
 		void set_paint_function(void (*a)(void))
 		{
 			paintFuncPtr = a;
+		}
+
+		int _mouse_x;
+		int _mouse_y;
+		bool _mouse_left_pressed;
+		bool _mouse_left_down;
+		bool _mouse_left_released;
+
+		bool mouse_left_pressed(int x, int y, int w, int h)
+		{
+			//printf("_mouse_left_pressed = %i\n",_mouse_left_pressed);
+			if (_mouse_left_pressed)
+				if (_mouse_x >= x && _mouse_x < x+w && _mouse_y >= y && _mouse_y < y+h)
+					return true;
+			return false;
+		}
+		bool mouse_left_down(int x, int y, int w, int h)
+		{
+			if (_mouse_left_down)
+				if (_mouse_x >= x && _mouse_x < x+w && _mouse_y >= y && _mouse_y < y+h)
+					return true;
+			return false;
+		}
+		bool mouse_left_released(int x, int y, int w, int h)
+		{
+			if (_mouse_left_released)
+				if (_mouse_x >= x && _mouse_x < x+w && _mouse_y >= y && _mouse_y < y+h)
+					return true;
+			return false;
+		}
+		int mouse_x()
+		{
+			return _mouse_x;
+		}
+		int mouse_y()
+		{
+			return _mouse_y;
 		}
 
 		LRESULT CALLBACK handle_win32_event(HWND Handle, UINT Message, WPARAM wParam, LPARAM lParam) // WndProc
@@ -109,31 +151,38 @@ namespace Wumbo
 				EndPaint(Handle, &ps);
 #else
 				PAINTSTRUCT ps;
-				wmpainting_hdc = BeginPaint(Handle, &ps);
-				wmpainting_hdcMem = CreateCompatibleDC(wmpainting_hdc);
+				imagedraw_destHDC = BeginPaint(Handle, &ps);
+				//imagedraw_srcHDC = CreateCompatibleDC(imagedraw_destHDC);
 
-				//BitBlt(wmpainting_hdcMem,0,0,480,480,OFFSCREEN_HDC,0,0,SRCCOPY);
+				//paint_rectangle(0,0,680,480,0x0000FF00);
 
-
-				RECT rect;
-				rect.left = 200;
-				rect.top = 0;
-				rect.right = rect.left + 480;
-				rect.bottom = rect.top + 480;
-				HBRUSH brush;
-				brush = CreateSolidBrush(0x00FF00FF);
-				//DeleteO
-				FillRect(wmpainting_hdc, &rect, brush);
-				DeleteObject(brush);
-
-				wmpainting = true;
 				if (paintFuncPtr != NULL)
 					paintFuncPtr();
-				wmpainting = false;
 
-				DeleteDC(wmpainting_hdcMem);
+				//paint_rectangle(400,200,48,48,0x00FF00FF);
+
+				//DeleteDC(imagedraw_srcHDC);
 				EndPaint(Handle, &ps);
 #endif
+				break;
+			case WM_LBUTTONDOWN:
+				//printf("DOWN!\n");
+				_mouse_x = lLO;
+				_mouse_y = lHI;
+				_mouse_left_pressed = true;
+				_mouse_left_down = true;
+				_mouse_left_released = false;
+				break;
+			case WM_LBUTTONUP:
+				_mouse_x = lLO;
+				_mouse_y = lHI;
+				_mouse_left_pressed = false;
+				_mouse_left_down = false;
+				_mouse_left_released = true;
+				break;
+			case WM_MOUSEMOVE:
+				_mouse_x = lLO;
+				_mouse_y = lHI;
 				break;
 			case WM_CLOSE:
 				DestroyWindow(Handle);
@@ -232,10 +281,14 @@ namespace Wumbo
 		{
 			wmpainting = false;
 			paintFuncPtr = NULL;
+			rectcolor = 0x00FFFFFF;
+			rectbrush = CreateSolidBrush(rectcolor);
 			wmpainting_bfn.BlendOp = AC_SRC_OVER;
 			wmpainting_bfn.BlendFlags = 0;
 			wmpainting_bfn.SourceConstantAlpha = 255;
 			wmpainting_bfn.AlphaFormat = AC_SRC_ALPHA;
+
+			imagedraw_srcHDC = CreateCompatibleDC(NULL);
 
 			InitCommonControlsEx(NULL);
 			hinstance = (HINSTANCE)GetWindowLong(NULL, GWL_HINSTANCE);
@@ -259,8 +312,9 @@ namespace Wumbo
 
 		void handle_messages()
 		{
-			Wumbo::NativeGUI::controlevents_count = 0;
-
+			controlevents_count = 0;
+			_mouse_left_pressed = false;
+			_mouse_left_released = false;
 			MSG Message;
 			Message.message = ~WM_QUIT;
 			while (PeekMessage(&Message, NULL, 0, 0, PM_REMOVE))
@@ -428,8 +482,16 @@ namespace Wumbo
 			RECT inner, outer;
 			GetWindowRect(hwnd, &outer);
 			GetClientRect(hwnd, &inner);
+			printf("Window: %i %i %i %i\n",outer.left,outer.top,outer.right-outer.left,outer.bottom-outer.top);
+			printf("Client: %i %i %i %i\n",inner.left,inner.top,inner.right-inner.left,inner.bottom-inner.top);
 			int dx = (outer.right - outer.left) - inner.right;
-			int dy = (outer.bottom - outer.top) - inner.bottom;
+			printf("Style: %u\n",GetWindowLong(hwnd,GWL_STYLE));
+			printf("MENU: %u\n",WS_SYSMENU);
+			printf(" S&M: %u\n",GetWindowLong(hwnd,GWL_STYLE) & WS_SYSMENU);
+			int h = 0;
+			if ((GetWindowLong(hwnd,GWL_STYLE) & WS_SYSMENU) > 0)
+				h = GetSystemMetrics(SM_CYMENU);
+			int dy = (outer.bottom - outer.top) - inner.bottom + h;
 			MoveWindow(hwnd, outer.left, outer.top, width+dx, height+dy, true);
 		}
 
@@ -973,27 +1035,73 @@ namespace Wumbo
 			delete newptr;
 			return v;
 		}
-		void image_draw(int image, int x, int y)
-		{
-			BITMAP bitmap;
-			wmpainting_oldBitmap = SelectObject(wmpainting_hdcMem, images[image]);
-			GetObject(images[image], sizeof(bitmap), &bitmap);
-			AlphaBlend(wmpainting_hdc, x,y, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
-			//AlphaBlend(wmpainting_hdc, 500, 100, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
-			SelectObject(wmpainting_hdcMem, wmpainting_oldBitmap);
 
-			return;
-			if (!wmpainting)
-				return;
-			//BITMAP bitmap;
-			wmpainting_oldBitmap = SelectObject(wmpainting_hdcMem, images[image]);
-			GetObject(images[image], sizeof(bitmap), &bitmap);
-			AlphaBlend(wmpainting_hdc, x, y, bitmap.bmWidth, bitmap.bmHeight,wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
-			SelectObject(wmpainting_hdcMem, wmpainting_oldBitmap);
-		}
 		void image_delete(int image)
 		{
 			DeleteObject(images[image]);
+		}
+
+		HBITMAP image_getbitmap(int image)
+		{
+			return images[image];
+		}
+
+
+		void paint_resetDC()
+		{
+			imagedraw_destHDC = NULL;
+			//imagedraw_srcHDC = NULL;
+		}
+		void paint_setDC(HDC hdc)//, HDC hdcmem)
+		{
+			imagedraw_destHDC = hdc;
+			//imagedraw_srcHDC = hdcmem;
+		}
+
+		void paint_rectangle(int x, int y, int w, int h, unsigned int color)
+		{
+			if (rectcolor != color)
+			{
+				DeleteObject(rectbrush);
+				rectcolor = color;
+				rectbrush = CreateSolidBrush(rectcolor);
+			}
+			RECT rect;
+			rect.left = x;
+			rect.top = y;
+			rect.right = x+w;
+			rect.bottom = y+h;
+			FillRect(imagedraw_destHDC, &rect, rectbrush);
+		}
+
+		void paint_image(int image, int x, int y, int xscale = 1, int yscale = 1)
+		{
+			BITMAP bitmap;
+			HGDIOBJ old = SelectObject(imagedraw_srcHDC, images[image]);
+			GetObject(images[image], sizeof(bitmap), &bitmap);
+			AlphaBlend(imagedraw_destHDC, x,y, bitmap.bmWidth*xscale, bitmap.bmHeight*yscale, imagedraw_srcHDC, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			//AlphaBlend(wmpainting_hdc, 500, 100, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			SelectObject(imagedraw_srcHDC, old);
+		}
+
+		void paint_hbitmap(HBITMAP hbitmap, int x, int y)
+		{
+			BITMAP bitmap;
+			HGDIOBJ old = SelectObject(imagedraw_srcHDC, hbitmap);
+			GetObject(hbitmap, sizeof(bitmap), &bitmap);
+			BitBlt(imagedraw_destHDC, x, y, bitmap.bmWidth, bitmap.bmHeight, imagedraw_srcHDC, 0, 0, SRCCOPY);
+			//AlphaBlend(wmpainting_hdc, 500, 100, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			SelectObject(imagedraw_srcHDC, old);
+		}
+
+		void paint_DC(HDC hdc, int x, int y, int width, int height)
+		{
+			//BITMAP bitmap;
+			//HGDIOBJ old = SelectObject(imagedraw_srcHDC, hbitmap);
+			//GetObject(hbitmap, sizeof(bitmap), &bitmap);
+			BitBlt(imagedraw_destHDC, x, y, width, height, hdc, 0, 0, SRCCOPY);
+			//AlphaBlend(wmpainting_hdc, 500, 100, bitmap.bmWidth, bitmap.bmHeight, wmpainting_hdcMem, 0, 0, bitmap.bmWidth, bitmap.bmHeight, wmpainting_bfn);
+			//SelectObject(imagedraw_srcHDC, old);
 		}
 	}
 }

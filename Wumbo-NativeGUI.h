@@ -17,6 +17,13 @@ namespace Wumbo
 		extern void enable_control(int control);
 		extern void disable_control(int control);
 
+		extern bool mouse_left_pressed(int x, int y, int w, int h);
+		extern bool mouse_left_down(int x, int y, int w, int h);
+		extern bool mouse_left_released(int x, int y, int w, int h);
+
+		extern int mouse_x();
+		extern int mouse_y();
+
 
 		int controlgroup_create();
 		void controlgroup_addcontrol(int controlgroup, int control);
@@ -85,12 +92,19 @@ namespace Wumbo
 		extern int imagelist_create(int width, int height);
 		extern int imagelist_addimage(int imagelist, int image);
 
+
 		extern int image_createfromptr(const unsigned char *ptr, unsigned int width, unsigned int height);
 		extern int image_createfromptrsubrect(const unsigned char *ptr, unsigned int width, unsigned int height, unsigned int destX, unsigned int destY, unsigned int destWidth, unsigned int destHeight);
-
-		extern void image_draw(int image, int x, int y);
-
+		extern HBITMAP image_getbitmap(int image);
 		extern int image_delete(int image);
+
+
+		extern void paint_resetDC();
+		extern void paint_setDC(HDC hdc);//, HDC hdcmem);
+		extern void paint_image(int image, int x, int y, int xscale = 1, int yscale = 1);
+		extern void paint_hbitmap(HBITMAP hbitmap, int x, int y);
+		extern void paint_DC(HDC hdc, int x, int y, int width, int height);
+		extern void paint_rectangle(int x, int y, int w, int h, unsigned int color);
 		/*extern int listbox_addstring(int listbox, const char *text);
 		extern void listbox_deletestring(int listbox, int index);
 		extern int listbox_getselectedindex(int listbox);
